@@ -2,10 +2,11 @@
 
 use Illuminate\Support\Facades\Route;
 
+// Both routes serve the React SPA shell; React Router handles client-side routing.
 Route::get('/', function () {
-    return view('upload');
+    return view('app');
 });
 
 Route::get('/dashboard', function () {
-    return view('dashboard');
+    return view('app');
 });
