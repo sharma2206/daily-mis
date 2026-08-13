@@ -1,11 +1,38 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import Navbar from '../components/Navbar';
 
 const BED = { chromepet: 74, oragadam: 14 };
 const REV_COLS = ['op', 'ip', 'er', 'ph'];
 
 function lk(v) { return ((v || 0) / 100000).toFixed(2); }
-function fmtRupee(v) { return '₹' + Math.round(Number(v || 0)); }
+function fmtRupee(v) { return '₹' + Math.round(Number(v || 0)).toLocaleString(); }
+
+function trendChip(ftd, mtd) {
+    if (!mtd || mtd === 0) return null;
+    const pct = (((ftd - mtd / 30) / (mtd / 30)) * 100).toFixed(1);
+    const up = parseFloat(pct) >= 0;
+    return (
+        <span className={`sc-trend ${up ? 'up' : 'down'}`}>
+            <span className="material-icons-round">{up ? 'trending_up' : 'trending_down'}</span>
+            {up ? '+' : ''}{pct}%
+        </span>
+    );
+}
+
+function SkeletonGrid() {
+    return (
+        <div className="summary-grid">
+            {[1, 2, 3, 4].map(i => (
+                <div key={i} className="skeleton-card">
+                    <div className="skeleton skeleton-line" style={{ width: '40%' }} />
+                    <div className="skeleton skeleton-line" style={{ width: '60%', marginTop: '.5rem' }} />
+                    <div className="skeleton skeleton-value" style={{ width: '55%' }} />
+                    <div className="skeleton skeleton-line" style={{ width: '45%', marginTop: '.35rem' }} />
+                </div>
+            ))}
+        </div>
+    );
+}
 
 export default function DashboardPage() {
     const today = new Date().toISOString().split('T')[0];
@@ -14,30 +41,10 @@ export default function DashboardPage() {
     const [reportData, setReportData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    const branchRef = useRef(branch);
-    branchRef.current = branch;
 
-    // ── switchBranch ─────────────────────────────────────────────
-    function switchBranch(b) {
-        setBranch(b);
-        if (reportData) loadReport(b, date);
-    }
-
-    // ── shiftDate ────────────────────────────────────────────────
-    function shiftDate(d) {
-        const dt = new Date(date);
-        dt.setDate(dt.getDate() + d);
-        const s = dt.toISOString().split('T')[0];
-        if (s <= today) {
-            setDate(s);
-            loadReport(branch, s);
-        }
-    }
-
-    // ── loadReport ───────────────────────────────────────────────
-    async function loadReport(br, dt) {
-        const b = br || branch;
-        const d = dt || date;
+    const loadReport = useCallback(async (br, dt) => {
+        const b = br ?? branch;
+        const d = dt ?? date;
         if (!d) return;
         setLoading(true);
         setError(null);
@@ -55,6 +62,18 @@ export default function DashboardPage() {
         } finally {
             setLoading(false);
         }
+    }, [branch, date]);
+
+    function switchBranch(b) {
+        setBranch(b);
+        if (reportData) loadReport(b, date);
+    }
+
+    function shiftDate(d) {
+        const dt = new Date(date);
+        dt.setDate(dt.getDate() + d);
+        const s = dt.toISOString().split('T')[0];
+        if (s <= today) { setDate(s); loadReport(branch, s); }
     }
 
     return (
@@ -82,46 +101,43 @@ export default function DashboardPage() {
                         <button className="date-nav" onClick={() => shiftDate(-1)} title="Previous day">
                             <span className="material-icons-round" style={{ fontSize: 16 }}>chevron_left</span>
                         </button>
-                        <input type="date" className="date-input" id="reportDate" max={today}
+                        <input type="date" className="date-input" max={today}
                             value={date} onChange={e => setDate(e.target.value)} />
                         <button className="date-nav" onClick={() => shiftDate(1)} title="Next day">
                             <span className="material-icons-round" style={{ fontSize: 16 }}>chevron_right</span>
                         </button>
-                        <button className="btn-load" id="loadBtn" onClick={() => loadReport()} disabled={loading}>
-                            <span className="material-icons-round" style={{ fontSize: 16 }}>refresh</span>
+                        <button className="btn-load" onClick={() => loadReport()} disabled={loading}>
+                            <span className="material-icons-round" style={{ fontSize: 16 }}>
+                                {loading ? 'hourglass_empty' : 'refresh'}
+                            </span>
                             <span>{loading ? 'Loading...' : 'Load Report'}</span>
                         </button>
                     </div>
                 </div>
 
                 <div id="content">
-                    {loading && (
-                        <div className="loading-overlay show">
-                            <div className="loader" />
-                        </div>
-                    )}
-                    {!reportData && !loading && !error && (
+                    {loading && <SkeletonGrid />}
+                    {!loading && !reportData && !error && (
                         <div className="no-data">
                             <div className="nd-icon"><span className="material-icons-round">analytics</span></div>
                             <p>Select a branch and date to view MIS report</p>
                             <p className="sub">Upload CSV files first if no data exists for the selected date</p>
                         </div>
                     )}
-                    {!reportData && !loading && error && (
+                    {!loading && !reportData && error && (
                         <div className="no-data">
-                            <div className="nd-icon"><span className="material-icons-round">warning</span></div>
+                            <div className="nd-icon"><span className="material-icons-round">warning_amber</span></div>
                             <p>{error}</p>
                             <p className="sub">Try uploading CSV files for this date first</p>
                         </div>
                     )}
-                    {reportData && <Report data={reportData} branch={branch} date={date} />}
+                    {!loading && reportData && <Report data={reportData} branch={branch} date={date} />}
                 </div>
             </div>
         </>
     );
 }
 
-// ── Report renderer ──────────────────────────────────────────────
 function Report({ data, branch, date }) {
     const s = data.sales || {}, c = data.collection || {}, dc = data.discount || {};
     const r = data.refund || {}, v = data.volume || {}, m = data.mri || {};
@@ -130,38 +146,18 @@ function Report({ data, branch, date }) {
     const isOragadam = branch === 'oragadam';
     const colSpan = REV_COLS.length + 1;
 
-    // ── Summary Cards
     const summaryCards = [
-        {
-            cls: 'sales', icon: 'payments', label: 'Total Sales',
-            ftd: `₹${lk(t.sales_ftd)}`, mtd: `₹${lk(t.sales_mtd)}`, unit: 'Lakhs'
-        },
-        {
-            cls: 'collection', icon: 'account_balance', label: 'Collection',
-            ftd: `₹${lk(t.collection_ftd)}`, mtd: `₹${lk(t.collection_mtd)}`, unit: 'Lakhs'
-        },
-        {
-            cls: 'discount', icon: 'hotel', label: 'Occupancy',
-            ftd: v.ftd?.occupancy || 0, ftdUnit: `of ${BED[branch]} beds`,
-            mtd: `${Number(v.ftd?.occupancy_pct || 0).toFixed(1)}%`, mtdLabel: 'FTD %', unit: 'Occupancy'
-        },
-        {
-            cls: 'refund', icon: 'person_add', label: 'Admissions',
-            ftd: v.ftd?.admission || 0, mtd: v.mtd?.admission || 0,
-            ftdUnit: 'Admitted', unit: 'Total'
-        },
+        { cls: 'sales', icon: 'payments', label: 'Total Sales', ftd: `₹${lk(t.sales_ftd)}`, mtd: `₹${lk(t.sales_mtd)}`, unit: 'Lakhs', rawFtd: t.sales_ftd, rawMtd: t.sales_mtd },
+        { cls: 'collection', icon: 'account_balance', label: 'Collection', ftd: `₹${lk(t.collection_ftd)}`, mtd: `₹${lk(t.collection_mtd)}`, unit: 'Lakhs', rawFtd: t.collection_ftd, rawMtd: t.collection_mtd },
+        { cls: 'discount', icon: 'hotel', label: 'Occupancy', ftd: v.ftd?.occupancy || 0, ftdUnit: `of ${BED[branch]} beds`, mtd: `${Number(v.ftd?.occupancy_pct || 0).toFixed(1)}%`, mtdLabel: 'FTD %', unit: 'Occupancy' },
+        { cls: 'refund', icon: 'person_add', label: 'Admissions', ftd: v.ftd?.admission || 0, mtd: v.mtd?.admission || 0, ftdUnit: 'Admitted', unit: 'Total MTD', rawFtd: v.ftd?.admission, rawMtd: v.mtd?.admission },
     ];
 
-    // ── Revenue table rows
-    const tableRows = [
-        { label: 'Sales', d: s },
-        { label: 'Collection', d: c },
-    ];
+    const tableRows = [{ label: 'Sales', d: s }, { label: 'Collection', d: c }];
     const dp = dc.ftd?.partial || {}, dpm = dc.mtd?.partial || {};
     const df = dc.ftd?.full || {}, dfm = dc.mtd?.full || {};
     const rf = r.ftd || {}, rm = r.mtd || {};
 
-    // ── Volume cards
     const vols = [
         { label: 'Occupancy', ftd: v.ftd?.occupancy || 0, mtd: v.mtd?.occupancy || 0 },
         { label: 'Occupancy %', ftd: (v.ftd?.occupancy_pct || 0) + '%', mtd: (v.mtd?.occupancy_pct || 0) + '%' },
@@ -195,7 +191,6 @@ function Report({ data, branch, date }) {
 
     return (
         <>
-            {/* Summary */}
             <div className="summary-grid">
                 {summaryCards.map(sc => (
                     <div key={sc.cls} className={`summary-card ${sc.cls}`}>
@@ -206,6 +201,7 @@ function Report({ data, branch, date }) {
                                 <div className="sc-period">FTD</div>
                                 <div className="sc-value ftd">{sc.ftd}</div>
                                 <div className="sc-unit">{sc.ftdUnit || sc.unit}</div>
+                                {sc.rawFtd !== undefined && trendChip(sc.rawFtd, sc.rawMtd)}
                             </div>
                             <div className="sc-block">
                                 <div className="sc-period">{sc.mtdLabel || 'MTD'}</div>
@@ -217,7 +213,6 @@ function Report({ data, branch, date }) {
                 ))}
             </div>
 
-            {/* Package alert */}
             {((pkg.ftd || 0) > 0 || (pkg.mtd || 0) > 0) && (
                 <div className="pkg-alert">
                     <span className="material-icons-round">inventory_2</span>
@@ -229,7 +224,6 @@ function Report({ data, branch, date }) {
                 </div>
             )}
 
-            {/* Revenue table */}
             <div className="section">
                 <div className="section-head">
                     <div className="section-title">
@@ -271,7 +265,6 @@ function Report({ data, branch, date }) {
                 </div>
             </div>
 
-            {/* Volume */}
             <div className="section">
                 <div className="section-head">
                     <div className="section-title">

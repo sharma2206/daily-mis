@@ -3,6 +3,13 @@ import Navbar from "../components/Navbar";
 
 const BED_COUNTS = { chromepet: 74, oragadam: 14 };
 
+const STEPS = [
+    { label: 'Select Branch', icon: 'local_hospital' },
+    { label: 'Choose Date', icon: 'calendar_today' },
+    { label: 'Upload Files', icon: 'folder_open' },
+    { label: 'Submit', icon: 'cloud_upload' },
+];
+
 export default function UploadPage() {
     const [branch, setBranch] = useState("chromepet");
     const [occupancy, setOccupancy] = useState("");
@@ -13,12 +20,17 @@ export default function UploadPage() {
         cashier_file: null,
         package_file: null,
     });
+    const [dateVal, setDateVal] = useState('');
     const [alert, setAlert] = useState(null); // { type: 'success'|'error', msg }
     const [loading, setLoading] = useState(false);
     const [response, setResponse] = useState(null);
     const formRef = useRef(null);
 
     const today = new Date().toISOString().split("T")[0];
+
+    // compute active step
+    const filesReady = files.bill_file && files.cashier_file && (branch !== 'chromepet' || files.package_file);
+    const activeStep = response ? 4 : filesReady ? 3 : dateVal ? 2 : 1;
 
     // ── calcOccupancyPct ──────────────────────────────────────────
     const calcOccupancyPct = useCallback(
@@ -137,7 +149,7 @@ export default function UploadPage() {
         );
     }
 
-    const dateVal = formRef.current?.querySelector("#dateInput")?.value || "";
+
     const isChromepet = branch === "chromepet";
 
     return (
@@ -146,10 +158,26 @@ export default function UploadPage() {
             <div className="upload-container">
                 <div className="intro">
                     <h2>MIS Report Upload</h2>
-                    <p>
-                        Upload hospital branch daily transaction logs to
-                        generate MIS analytics
-                    </p>
+                    <p>Upload hospital branch daily transaction logs to generate MIS analytics</p>
+                </div>
+
+                {/* Steps Bar */}
+                <div className="steps-bar">
+                    {STEPS.map((st, i) => {
+                        const stepN = i + 1;
+                        const isDone = stepN < activeStep;
+                        const isActive = stepN === activeStep;
+                        return (
+                            <div key={i} className={`step${isDone ? ' done' : isActive ? ' active' : ''}`}>
+                                <span className="step-num">
+                                    {isDone
+                                        ? <span className="material-icons-round" style={{fontSize:12}}>check</span>
+                                        : stepN}
+                                </span>
+                                <span>{st.label}</span>
+                            </div>
+                        );
+                    })}
                 </div>
 
                 {alert && (
@@ -226,6 +254,7 @@ export default function UploadPage() {
                                     id="dateInput"
                                     max={today}
                                     required
+                                    onChange={e => setDateVal(e.target.value)}
                                 />
                                 <span className="help">
                                     Select the date of transaction records
