@@ -239,6 +239,10 @@ function Report({ data, branch, date }) {
                         </a>
                     </div>
                 </div>
+                <div className="table-scroll-hint">
+                    <span className="material-icons-round">swipe</span>
+                    Swipe horizontally to view all FTD &amp; MTD columns
+                </div>
                 <div className="card">
                     <table className="tbl">
                         <thead>
